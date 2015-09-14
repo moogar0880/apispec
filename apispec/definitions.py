@@ -148,9 +148,9 @@ def generate_defintion_class(name, bases=(DefinitionBase,), **kwargs):
     :param kwargs: Arbitrary keyword args defining the model's properties
     :return: The newly created class type
     """
-    # TODO(moogar0880): allOf support (requires $ref)
-    # TODO(moogar0880): enum support
-    # TODO(moogar0880): min/max support for ints
+    # TODO(moogar0880): min/max support for ints/floats
     # TODO(moogar0880): Definition examples
     # TODO(moogar0880): regex formatting for strings
+    # TODO(moogar0880): allOf support (requires $ref) (spec inheritance)
+    # TODO(moogar0880): enum support
     return type(name, bases, kwargs.get('properties', {}))
