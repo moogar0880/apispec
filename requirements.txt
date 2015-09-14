@@ -1,0 +1,3 @@
+PyYAML==3.11
+requests==2.7.0
+iso8601.py --allow-external iso8601.py --allow-unverified iso8601.py
