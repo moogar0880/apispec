@@ -53,7 +53,10 @@ class DefinitionMeta(type):
                 bool: cls.bool_field,
                 tuple: cls.array_field
             }
-            type_map[typ](field_name, field)
+
+            # Set the descriptor into the class's namespace
+            setattr(clsobj, field_name,
+                    type_map[typ](field_name, field))
         return clsobj
 
     @staticmethod
@@ -84,6 +87,10 @@ class DefinitionMeta(type):
 
     @classmethod
     def int_field(cls, name, field):
+        if 'minimum' in field or 'maximum' in field:
+            return SizedInteger(name, default=field.get('default', None),
+                                minimum=field.get('minimum', None),
+                                maximum=field.get('maximum', None))
         return Integer(name, default=field.get('default', None))
 
     @classmethod
@@ -148,7 +155,6 @@ def generate_defintion_class(name, bases=(DefinitionBase,), **kwargs):
     :param kwargs: Arbitrary keyword args defining the model's properties
     :return: The newly created class type
     """
-    # TODO(moogar0880): min/max support for ints/floats
     # TODO(moogar0880): Definition examples
     # TODO(moogar0880): regex formatting for strings
     # TODO(moogar0880): allOf support (requires $ref) (spec inheritance)

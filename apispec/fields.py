@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import re
 
-__all__ = ['Descriptor', 'Typed', 'Integer', 'Float', 'String', 'Bytes',
-           'Boolean', 'Regex', 'Date', 'DateTime', 'Array']
+__all__ = ['Descriptor', 'Typed', 'Integer', 'SizedInteger', 'Float',
+           'SizedFloat', 'String', 'Bytes', 'Boolean', 'Regex', 'Date',
+           'DateTime', 'Array']
 
 
 class Descriptor:
@@ -40,13 +41,35 @@ class Typed(Descriptor):
         super(Typed, self).__set__(instance, value)
 
 
-# Specialized types
+class Sized(Descriptor):
+    def __init__(self, *args, minimum=None, maximum=None, **kwargs):
+        self.maximum, self.minimum = maximum, minimum
+        super(Sized, self).__init__(*args, **kwargs)
+
+    def __set__(self, instance, value):
+        if self.minimum is not None and value <= self.minimum:
+            raise ValueError('Value %s is too small. Minimum is %s' %
+                             (str(value), str(self.minimum)))
+        if self.maximum is not None and value >= self.maximum:
+            raise ValueError('Value %s is too large. Maximum is %s' %
+                             (str(value), str(self.minimum)))
+        super(Sized, self).__set__(instance, value)
+
+
 class Integer(Typed):
     ty = int
 
 
+class SizedInteger(Integer, Sized):
+    pass
+
+
 class Float(Typed):
     ty = float
+
+
+class SizedFloat(Float, Sized):
+    pass
 
 
 class String(Typed):
@@ -69,14 +92,6 @@ class Array(Typed):
         super(Array, self).__init__(*args, default=default, **kwargs)
 
     def __set__(self, instance, value):
-        """
-from apispec import SwaggerSpec
-s = SwaggerSpec()
-Exercise = s.definitions['Exercise']
-Set = s.definitions['Set']
-s1 = Set(reps=20, weight=20, order=20, rest=20)
-e1 = Exercise(comment='words', sets=[s1])
-        """
         self.value.extend(value)
         super(Array, self).__set__(instance, self.value)
 
