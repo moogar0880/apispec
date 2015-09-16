@@ -19,7 +19,7 @@ def _make_init(args, kwargs):
     code = 'def __init__(self, %s):\n' % ', '.join(args + kwargs)
 
     for name in fields:
-        code += '    self._%s = %s\n' % (name, name)
+        code += '    self.%s = %s\n' % (name, name)
     return code
 
 
@@ -91,7 +91,8 @@ class DefinitionMeta(type):
                 bool: cls.bool_field,
                 tuple: cls.array_field
             }
-
+            if clsname == 'Server':
+                import ipdb; ipdb.set_trace()
             # Set the descriptor into the class's namespace
             setattr(clsobj, field_name,
                     type_map[typ](field_name, field))
@@ -140,6 +141,9 @@ class DefinitionMeta(type):
         format_ = field.get('format', None)
         if format_ == 'byte' or format_ == 'binary':
             return cls.byte_field(name, field)
+        elif 'pattern' in field:
+            return Regex(name, pattern=field['pattern'],
+                         default=field.get('default', None))
         elif format_ == 'date':
             pass
         elif format_ == 'date-time':
@@ -193,7 +197,6 @@ def generate_defintion_class(name, bases=(DefinitionBase,), **kwargs):
     :param kwargs: Arbitrary keyword args defining the model's properties
     :return: The newly created class type
     """
-    # TODO(moogar0880): regex formatting for strings
     # TODO(moogar0880): allOf support (requires $ref) (spec inheritance)
     # TODO(moogar0880): enum support
     return type(name, bases, kwargs)
