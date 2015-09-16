@@ -19,8 +19,32 @@ def _make_init(args, kwargs):
     code = 'def __init__(self, %s):\n' % ', '.join(args + kwargs)
 
     for name in fields:
-        code += '    self.%s = %s\n' % (name, name)
+        code += '    self._%s = %s\n' % (name, name)
     return code
+
+
+def _generate_example_generator(**kwargs):
+    """Generate a function that can be used as a class method that generates
+    example instances of it's implementing class, given the examples provided
+    via kwargs. If there is no 'examples' key provided in kwargs, return
+    :const:`None`.
+
+    :param kwargs: Keyword args from the model definition. If present, the
+        'examples' key will be extracted
+    :return: A function capable of being used as a class method to generate
+        example instances of the implementing class. Or :const:`None` if no
+        example definitions are provided.
+    """
+    # If we can't find any examples, return None
+    if 'examples' not in kwargs:
+        return None
+
+    examples = kwargs.get('examples', [])
+
+    def generate_examples(cls):
+        """Generate example instances of this class"""
+        return [cls(**ex) for ex in examples]
+    return generate_examples
 
 
 class DefinitionMeta(type):
@@ -29,23 +53,37 @@ class DefinitionMeta(type):
     """
 
     def __new__(cls, clsname, bases, clsdict):
-        args = [k for k in clsdict if isinstance(clsdict[k], dict) and
-                clsdict[k].get('required', False)]
-        kwargs = [(k, cls.type_from_name(clsdict[k].get('type')))
-                  for k in clsdict if isinstance(clsdict[k], dict) and
-                  not clsdict[k].get('required', False)]
+        properties = clsdict.get('properties', {})
+        args = [k for k in properties if isinstance(properties[k], dict) and
+                properties[k].get('required', False)]
+        kwargs = [(k, cls.type_from_name(properties[k].get('type')))
+                  for k in properties if isinstance(properties[k], dict) and
+                  not properties[k].get('required', False)]
         fields = args + [arg[0] for arg in kwargs]
 
         # Make the init function and inject it into our new class's namespace
         if fields:
-            exec(_make_init(args, kwargs), globals(), clsdict)
+            exec(_make_init(args, kwargs), globals(), properties)
 
-        clsobj = super().__new__(cls, clsname, bases, dict(clsdict))
-        setattr(clsobj, '_properties', fields)
+        # Handle checking to see if our definition has defined examples and
+        # generating a class method to create instances from those examples
+        example_gen = _generate_example_generator(**clsdict)
+        if example_gen is not None:
+            properties['generate_examples'] = classmethod(example_gen)
+
+        # Create our class type by calling type's __new__ method
+        clsobj = super().__new__(cls, clsname, bases, dict(properties))
+
+        # Keep a handle on the names of our defined attributes
+        setattr(clsobj, '__attrs__', fields)
+
+        # Iterate over each of our fields and put a Descriptor of the
+        # appropriate type into our class's namespace
         for field_name in fields:
-            field = clsdict[field_name]
+            field = properties[field_name]
             typ = cls.type_from_name(field['type'])
 
+            # Map types to the methods that create their descriptors
             type_map = {
                 int: cls.int_field,
                 float: cls.float_field,
@@ -155,8 +193,7 @@ def generate_defintion_class(name, bases=(DefinitionBase,), **kwargs):
     :param kwargs: Arbitrary keyword args defining the model's properties
     :return: The newly created class type
     """
-    # TODO(moogar0880): Definition examples
     # TODO(moogar0880): regex formatting for strings
     # TODO(moogar0880): allOf support (requires $ref) (spec inheritance)
     # TODO(moogar0880): enum support
-    return type(name, bases, kwargs.get('properties', {}))
+    return type(name, bases, kwargs)

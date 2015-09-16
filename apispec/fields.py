@@ -9,13 +9,13 @@ __all__ = ['Descriptor', 'Typed', 'Integer', 'SizedInteger', 'Float',
 class Descriptor:
     def __init__(self, name=None, default=None):
         self.name = name
-        self.value = default
+        self.default = default
 
     def __get__(self, instance, owner):
-        return self.value
+        return getattr(instance, '_' + self.name, self.default)
 
     def __set__(self, instance, value):
-        self.value = value
+        return setattr(instance, '_' + self.name, value)
 
     def __delete__(self, instance):
         raise AttributeError("Can't delete")
@@ -92,8 +92,9 @@ class Array(Typed):
         super(Array, self).__init__(*args, default=default, **kwargs)
 
     def __set__(self, instance, value):
-        self.value.extend(value)
-        super(Array, self).__set__(instance, self.value)
+        val = getattr(instance, '_' + self.name, self.default)
+        val.extend(value)
+        super(Array, self).__set__(instance, val)
 
 
 class TypedList(list):
