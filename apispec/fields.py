@@ -7,7 +7,7 @@ import re
 
 __all__ = ['Descriptor', 'Typed', 'Integer', 'SizedInteger', 'Float',
            'SizedFloat', 'String', 'Bytes', 'Boolean', 'Regex', 'Date',
-           'DateTime', 'Array']
+           'DateTime', 'Array', 'Oneof']
 
 
 class Descriptor:
@@ -159,6 +159,26 @@ class DateTime(Regex):
 
 
 # Collection validation
+class Oneof(Descriptor):
+    """Descriptor for ensuring that an attribute can only be assigned to a
+    particular set of values, not just a particular type
+    """
+
+    def __init__(self, *args, values, **kwargs):
+        """Create a new regex descriptor and store it's compiled pattern"""
+        self.valid_values = values
+        super(Oneof, self).__init__(*args, **kwargs)
+
+    def __set__(self, instance, value):
+        """Pass the assignment up the chain only if the provided value matches
+        this descriptors pattern
+        """
+        if value not in self.valid_values:
+            raise ValueError('Invalid value: %s. Must be one of %s' %
+                             (value, self.valid_values))
+        super(Oneof, self).__set__(instance, value)
+
+
 class Array(Typed):
     """Type check for :class:`TypedList` (:const:`list`) values. This
     :class:`Descriptor` type allows us to set definition attributes that

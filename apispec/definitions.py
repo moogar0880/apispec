@@ -14,11 +14,15 @@ def _make_init(args, kwargs):
     """Given a list of required and optional field names, generate an
     __init__ method. Optional fields will default to :const:`None`
     """
+    # Parse out the names of our args and kwargs, as well as the default value
+    # for the kwargs
     fields = args + [arg[0] for arg in kwargs]
     kwargs = [name + '={}()'.format(typ.__name__) for (name, typ) in kwargs]
     code = 'def __init__(self, %s):\n' % ', '.join(args + kwargs)
 
     for name in fields:
+        # When called `self.%s` will point at the descriptor for that field,
+        # enfocing whatever type checking may be in place
         code += '    self.%s = %s\n' % (name, name)
     return code
 
@@ -81,6 +85,13 @@ class DefinitionMeta(type):
         # appropriate type into our class's namespace
         for field_name in fields:
             field = properties[field_name]
+
+            # Check for special enum case. If we've found an enum, set it and
+            # continue iterating
+            if 'enum' in field:
+                setattr(clsobj, field_name, cls.oneof_field(field_name, field))
+                continue
+
             typ = cls.type_from_name(field['type'])
 
             # Map types to the methods that create their descriptors
@@ -91,8 +102,7 @@ class DefinitionMeta(type):
                 bool: cls.bool_field,
                 tuple: cls.array_field
             }
-            if clsname == 'Server':
-                import ipdb; ipdb.set_trace()
+
             # Set the descriptor into the class's namespace
             setattr(clsobj, field_name,
                     type_map[typ](field_name, field))
@@ -122,10 +132,19 @@ class DefinitionMeta(type):
 
     @classmethod
     def array_field(cls, name, field):
+        """Create an Array descriptor for the provided items"""
         return Array(name, items=field['items'])
 
     @classmethod
+    def oneof_field(cls, name, field):
+        """Create a Oneof descriptor for the provided items"""
+        return Oneof(name, values=field['enum'])
+
+    @classmethod
     def int_field(cls, name, field):
+        """Create either an Integer or SizedInteger descriptor, depending on
+        whether a minimum or maximum were specified
+        """
         if 'minimum' in field or 'maximum' in field:
             return SizedInteger(name, default=field.get('default', None),
                                 minimum=field.get('minimum', None),
@@ -134,10 +153,20 @@ class DefinitionMeta(type):
 
     @classmethod
     def float_field(cls, name, field):
+        """Create either a Float or SizedFloat descriptor, depending on
+        whether a minimum or maximum were specified
+        """
+        if 'minimum' in field or 'maximum' in field:
+            return SizedFloat(name, default=field.get('default', None),
+                              minimum=field.get('minimum', None),
+                              maximum=field.get('maximum', None))
         return Float(name, default=field.get('default', None))
 
     @classmethod
     def string_field(cls, name, field):
+        """Create either a String, Byte, or Regex descriptor, depending on the
+        format specified.
+        """
         format_ = field.get('format', None)
         if format_ == 'byte' or format_ == 'binary':
             return cls.byte_field(name, field)
@@ -154,14 +183,17 @@ class DefinitionMeta(type):
 
     @classmethod
     def byte_field(cls, name, field):
+        """Return a Bytes descriptor"""
         return Bytes(name, default=field.get('default', None))
 
     @classmethod
     def bool_field(cls, name, field):
+        """Return a Boolean descriptor"""
         return Boolean(name, default=field.get('default', None))
 
     @classmethod
     def date_field(cls, name, field):
+        """Return a Date descriptor"""
         format_ = field.get('format', None)
         if format_ is None or format_ == 'iso8601':
             regex = (r'\A' + ISO8601_YEAR_RE + r'(?:' + r'(?P<datesep>-?)' +
@@ -172,6 +204,7 @@ class DefinitionMeta(type):
 
     @classmethod
     def datetime_field(cls, name, field):
+        """Return a DateTime descriptor"""
         format_ = field.get('format', None)
         if format_ is None or format_ == 'iso8601':
             return DateTime(name=name, pat=ISO8601_RE)
@@ -179,6 +212,7 @@ class DefinitionMeta(type):
 
     @classmethod
     def password_field(cls, name, field):
+        """Return a Password descriptor"""
         pass
 
 
@@ -198,5 +232,4 @@ def generate_defintion_class(name, bases=(DefinitionBase,), **kwargs):
     :return: The newly created class type
     """
     # TODO(moogar0880): allOf support (requires $ref) (spec inheritance)
-    # TODO(moogar0880): enum support
     return type(name, bases, kwargs)
